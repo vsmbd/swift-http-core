@@ -1,0 +1,24 @@
+{
+  "originHash" : "9d717616af130a348b030b3c142ef0a990244254acb6b64b9c84d17952d3325e",
+  "pins" : [
+    {
+      "identity" : "swift-core",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/vsmbd/swift-core.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "adaffffaf219c6149268f2bfa02512aeb2da841f"
+      }
+    },
+    {
+      "identity" : "swift-eventdispatch",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/vsmbd/swift-eventdispatch.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "36c4083118d35100ea86f411a61330a9b745bfa3"
+      }
+    }
+  ],
+  "version" : 3
+}
