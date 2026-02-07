@@ -24,4 +24,4 @@
 - Adapters are implementation details behind the HTTPClient protocol.
 
 7) No sensitive data in telemetry by default
-- Event payloads must not include raw bodies or authorization headers unless explicitly enabled via policy.
+- Event payloads must not include raw bodies or authorization headers unless explicitly enabled via HTTPCorePolicy.

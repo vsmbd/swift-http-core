@@ -12,8 +12,6 @@ This package is designed to compose with `swift-json` (product/module: `JSON`, e
 
 ## Package structure
 
-Recommended layout:
-
 ```
 swift-http-core/
   Package.swift
@@ -25,20 +23,23 @@ swift-http-core/
       HTTPHeaders.swift
       HTTPMethod.swift
       HTTPError.swift
-      HTTPEvents.swift
+      HTTPProcessingEvent.swift
       HTTPCorePolicy.swift
-    HTTPCoreURLSession/
+    HTTPCoreNativeCounters/
+      include/NativeCounters.h
+      NativeCounters.c
+    URLSessionHTTPClient/
       URLSessionHTTPClient.swift
       URLSessionCancellable.swift
   Tests/
     HTTPCoreTests/
-    HTTPCoreURLSessionTests/
+    URLSessionHTTPClientTests/
 ```
 
 ### Products
 
-- HTTPCore: pure contract + event model (no transport)
-- HTTPCoreURLSession: URLSession-based transport adapter (Apple + non-Darwin where FoundationNetworking is available)
+- **HTTPCore**: pure contract + event model (no transport). Depends on HTTPCoreNativeCounters, SwiftCore, EventDispatch.
+- **URLSessionHTTPClient**: URLSession-based transport adapter (Apple + non-Darwin where FoundationNetworking is available).
 
 If you later create an Alamofire adapter, keep it in a separate package or Apple-only target, depending on your workspace constraints.
 
@@ -63,14 +64,14 @@ let payload: JSON = .object([
 ])
 
 let body = try payload.toData(prettyPrinted: false)
-var req = HTTPRequest(
-  id: uniqueID,  // obtain a unique id per request (e.g. SwiftCore Entity.nextID)
+let req = HTTPRequest(
   method: .post,
   url: URL(string: "https://api.example.com/users")!,
   headers: .init([ "Content-Type": "application/json" ]),
   body: body,
   timeout: 30
 )
+// requestID is assigned internally via nextRequestID()
 ```
 
 ## Design principles
@@ -86,39 +87,48 @@ All network execution is explicitly dispatched to `TaskQueue.background`.
 
 ### 3) First-class observability
 Every request has:
-- a stable request ID
-- start/end timestamps
-- an explicit lifecycle (started → response received → completed or failed)
-- normalized error taxonomy
+- a stable request ID (from `nextRequestID()` at init)
+- timestamps on each lifecycle event (`MonotonicNanostamp`)
+- an explicit lifecycle (created → started → responseReceived → succeeded, or failed/cancelled)
+- checkpoint correlation: caller passes a checkpoint into `execute`; implementations create successor checkpoints so the full chain is traceable
+- normalized error taxonomy (`HTTPError` + `ErrorInfo` with checkpoint)
 
-EventDispatch events are emitted at key points to power telemetry sinks (Telme, ClickHouse, Grafana).
+EventDispatch events (`HTTPProcessingEvent`) are sunk at key points; telemetry sinks can subscribe via EventDispatch.
 
-## Minimal v1 API surface (recommended)
+## API surface
 
 ### Core types
 
 ```swift
-public struct HTTPRequest: Sendable {
-  public let id: UInt64
+public struct HTTPRequest: Sendable, Encodable {
+  public let requestID: UInt64   // from nextRequestID() at init
   public let method: HTTPMethod
   public let url: URL
   public var headers: HTTPHeaders
   public var body: Data?
   public var timeout: TimeInterval?
+  public init(method:url:headers:body:timeout:)
 }
 
-public struct HTTPResponse: Sendable {
+public struct HTTPResponse: Sendable, Encodable {
   public let requestID: UInt64
   public let statusCode: Int
   public let headers: HTTPHeaders
   public let data: Data
+  public init(request: HTTPRequest, statusCode:headers:data:)
 }
+
+public typealias HTTPExecutionResult = CheckpointedResult<HTTPResponse, HTTPError>
+// .success(HTTPResponse, Checkpoint) | .failure(ErrorInfo<HTTPError>)
+
+public typealias HTTPExecutionCompletion = @Sendable (HTTPExecutionResult) -> Void
 
 public protocol HTTPClient: Sendable {
   @discardableResult
   func execute(
     _ request: HTTPRequest,
-    completion: @escaping @Sendable (Result<HTTPResponse, HTTPError>) -> Void
+    _ checkpoint: Checkpoint,
+    completion: @escaping HTTPExecutionCompletion
   ) -> Cancellable
 }
 ```
@@ -133,45 +143,31 @@ public protocol Cancellable: Sendable {
 
 ### Errors
 
-Keep errors actionable and stable:
-
 ```swift
-public enum HTTPError: Error, Sendable, Equatable {
+public enum HTTPError: ErrorEntity {
   case cancelled
   case timeout
   case invalidResponse
-  case transport(UnderlyingError)
+  case transport(underlying: String)
 }
 ```
 
 ## Lifecycle events (EventDispatch)
 
-Emit a small but sufficient set of events in v1. Keep payloads compact and stable.
+A single enum `HTTPProcessingEvent` covers all phases; each case carries request (and response/error when applicable) plus `timestamp: MonotonicNanostamp`. Clients sink events with a `Checkpoint` for correlation.
 
-### Event names
-- http.request.created
-- http.request.started
-- http.response.received
-- http.request.succeeded
-- http.request.failed
-- http.request.cancelled
+### Event cases and kind suffixes
+- `created(request:timestamp:)` → kind `HTTPProcessingEvent_created`
+- `started(request:timestamp:)` → `_started`
+- `responseReceived(request:response:timestamp:)` → `_received`
+- `succeeded(request:response:timestamp:)` → `_succeeded`
+- `failed(request:error:timestamp:)` → `_failed`
+- `cancelled(request:timestamp:)` → `_cancelled`
 
-### Suggested payload fields
-- requestID
-- method
-- url (redaction policy applies)
-- statusCode (when known)
-- startTime, endTime, durationMs
-- requestBytes, responseBytes (best-effort)
-- error (normalized)
+Events are sunk via `EventDispatcher.sink(_:checkpoint:extra:)`. The caller passes a checkpoint into `execute(_:_:completion:)`; the implementation uses it and creates successor checkpoints (e.g. `checkpoint.next(self)`) so the full execution chain is correlated.
 
 ### Redaction policy
-Do not emit sensitive material by default:
-- strip or hash query parameters unless explicitly allowed
-- never emit Authorization headers
-- never emit raw bodies by default
-
-Model this as a HTTPCorePolicy injected into clients.
+`HTTPCorePolicy` is injected into clients: `allowQueryParametersInTelemetry`, `includeByteCountsInTelemetry`. Do not emit sensitive material by default; never emit raw bodies or Authorization headers unless explicitly enabled.
 
 ## Concurrency contract
 
@@ -180,11 +176,7 @@ Model this as a HTTPCorePolicy injected into clients.
 - All EventDispatch emissions for a request must also occur on TaskQueue.background to preserve ordering and avoid accidental main-thread work.
 
 ### Completion delivery
-Pick one and document it:
-- Option A: completion is invoked on TaskQueue.background
-- Option B: completion is invoked on a caller-provided TaskQueue (default: background)
-
-V1 recommendation: Option B, without exposing DispatchQueue in the public contract.
+URLSessionHTTPClient invokes completion on a configurable `completionQueue` (default: `TaskQueue.background`). Execution is scheduled on a configurable `queue` (default: `TaskQueue.background`). Both are `ConcurrentTaskQueue`; the contract does not expose DispatchQueue.
 
 ## URLSession adapter notes
 
@@ -205,13 +197,13 @@ Feature parity is not guaranteed across all Swift targets, but basic GET/POST is
 ```swift
 let client: HTTPClient = URLSessionHTTPClient(
   session: .shared,
-  policy: .default,
-  dispatcher: eventDispatcher,
-  queue: TaskQueue.background
+  policy: .init(),
+  dispatcher: EventDispatch.default,
+  queue: TaskQueue.background,
+  completionQueue: TaskQueue.background
 )
 
 let req = HTTPRequest(
-  id: uniqueID,  // obtain a unique id per request (e.g. SwiftCore Entity.nextID)
   method: .get,
   url: URL(string: "https://example.com")!,
   headers: .init(),
@@ -220,19 +212,24 @@ let req = HTTPRequest(
 )
 
 client.execute(req, Checkpoint.checkpoint(self)) { result in
-  // runs on TaskQueue.background (or the configured callback queue)
+  switch result {
+  case let .success(response, checkpoint): // use response, correlate via checkpoint
+  case let .failure(errorInfo):            // ErrorInfo<HTTPError>
+  }
+  // runs on completionQueue (default: TaskQueue.background)
 }
 ```
 
 ## Testing approach
 
-- Use URLProtocol stubbing on Apple platforms.
-- On Linux, prefer integration tests against a local test server if needed.
-- Validate:
-  - request translation (method, headers, body)
-  - response mapping (status, headers, data)
-  - error mapping (cancelled, timeout, transport)
-  - event ordering and timestamps
+- **HTTPCoreTests**: unit tests for HTTPRequest, HTTPResponse, HTTPMethod, HTTPHeaders, HTTPError, HTTPCorePolicy, HTTPProcessingEvent, HTTPExecutionResult (encoding, init, behaviour).
+- **URLSessionHTTPClientTests**: URLProtocol stub (`StubURLProtocol`) and a recording `EventDispatcher`; suite runs with `.serialized` so the shared stub handler is safe. Tests cover:
+  - success path (response + checkpoint, event order: created → started → responseReceived → succeeded)
+  - error mapping (cancelled, timeout, invalidResponse, transport)
+  - request translation (method, url, headers, timeout; body when URLProtocol exposes it)
+  - checkpoint correlation (caller checkpoint for created event; delivery checkpoint from client)
+  - cancel of in-flight request
+- On Linux, add integration tests against a local server if needed.
 
 ## Versioning
 

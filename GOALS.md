@@ -12,7 +12,8 @@
 
 3) Structured lifecycle tracking using EventDispatch
 - Emit deterministic lifecycle events for every request with stable identifiers and timestamps.
-- Provide policy-driven redaction to prevent sensitive data leakage.
+- Caller passes a checkpoint into `execute(_:_:completion:)`; implementations use it and create successor checkpoints so the full execution chain is correlated.
+- Provide policy-driven redaction (`HTTPCorePolicy`) to prevent sensitive data leakage.
 
 4) Deterministic ordering
 - Event emission and completion callbacks obey a documented ordering model.
@@ -20,30 +21,28 @@
 
 ## Implementation goals
 
-5) URLSession transport adapter
+5) URLSession transport adapter (URLSessionHTTPClient)
 - Provide a minimal URLSession-based implementation that supports:
-  - GET and POST
-  - headers
-  - body Data
-  - per-request timeout
-  - cancellation
+  - all HTTP methods (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS via HTTPMethod)
+  - headers, body Data, per-request timeout
+  - cancellation (Cancellable)
+  - configurable queue and completionQueue (default: TaskQueue.background)
 - Support non-Darwin where FoundationNetworking is available.
 
 6) Composition with swift-json
 - Standardize on `swift-json`'s `JSON` enum as the primary JSON type in this workspace.
 - Keep HTTPCore contracts byte-oriented, but ensure adapters and helper layers treat `swift-json` as the default JSON boundary.
 
-6) Composable policy surface
-- Provide an injectable policy object for:
-  - URL redaction
-  - header filtering
-  - optional metrics fields (byte counts, etc.)
+7) Composable policy surface
+- Provide an injectable policy object (`HTTPCorePolicy`) for:
+  - URL redaction (`allowQueryParametersInTelemetry`)
+  - optional metrics fields (`includeByteCountsInTelemetry`)
 
 ## Quality goals
 
-7) Testability
-- Unit tests for mapping and error taxonomy.
-- Tests for event emission ordering and payload stability.
+8) Testability
+- Unit tests (HTTPCoreTests) for types, encoding, error taxonomy, execution result.
+- Integration-style tests (URLSessionHTTPClientTests) with URLProtocol stub and recording EventDispatcher; event ordering, checkpoint correlation, error mapping, request translation, cancellation.
 
-8) Minimal public surface
-- Keep v1 lean and predictable; add capabilities via adapters and policies rather than expanding the core contract prematurely.
+9) Minimal public surface
+- Keep the core contract lean; add capabilities via adapters and policies rather than expanding the core prematurely.
