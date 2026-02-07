@@ -219,7 +219,7 @@ let req = HTTPRequest(
   timeout: 30
 )
 
-client.execute(req) { result in
+client.execute(req, Checkpoint.checkpoint(self)) { result in
   // runs on TaskQueue.background (or the configured callback queue)
 }
 ```

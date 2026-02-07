@@ -8,7 +8,11 @@ let package = Package(
 		.library(
 			name: "HTTPCore",
 			targets: ["HTTPCore"]
-		)
+		),
+		.library(
+			name: "URLSessionHTTPClient",
+			targets: ["URLSessionHTTPClient"]
+		),
 	],
 	dependencies: [
 		.package(
@@ -41,5 +45,20 @@ let package = Package(
 			path: "Sources/HTTPCoreNativeCounters",
 			publicHeadersPath: "include"
 		),
+		.target(
+			name: "URLSessionHTTPClient",
+			dependencies: [
+				"HTTPCore",
+				.product(
+					name: "SwiftCore",
+					package: "swift-core"
+				),
+				.product(
+					name: "EventDispatch",
+					package: "swift-eventdispatch"
+				),
+			],
+			path: "Sources/URLSessionHTTPClient"
+		)
 	]
 )

@@ -28,10 +28,11 @@ public typealias HTTPExecutionCompletion = @Sendable (HTTPExecutionResult) -> Vo
 
 /// Transport-agnostic HTTP client. Implementations must schedule work on an explicit queue (e.g. `TaskQueue.background`) and invoke completion on the documented queue.
 public protocol HTTPClient: Sendable {
-	/// Executes the request. Completion is invoked on the queue documented by the implementation (e.g. caller-provided or background).
+	/// Executes the request. Pass a checkpoint from the call site for correlation; implementations use it and create successor checkpoints (e.g. via `checkpoint.next(self)`). Completion is invoked on the queue documented by the implementation (e.g. caller-provided or background).
 	@discardableResult
 	func execute(
 		_ request: HTTPRequest,
+		_ checkpoint: Checkpoint,
 		completion: @escaping HTTPExecutionCompletion
 	) -> Cancellable
 }
