@@ -12,7 +12,7 @@ let package = Package(
 		.library(
 			name: "URLSessionHTTPClient",
 			targets: ["URLSessionHTTPClient"]
-		),
+		)
 	],
 	dependencies: [
 		.package(
@@ -59,6 +59,32 @@ let package = Package(
 				),
 			],
 			path: "Sources/URLSessionHTTPClient"
+		),
+		.testTarget(
+			name: "HTTPCoreTests",
+			dependencies: [
+				"HTTPCore",
+				.product(
+					name: "SwiftCore",
+					package: "swift-core"
+				)
+			],
+			path: "Tests/HTTPCoreTests"
+		),
+		.testTarget(
+			name: "URLSessionHTTPClientTests",
+			dependencies: [
+				"URLSessionHTTPClient",
+				.product(
+					name: "SwiftCore",
+					package: "swift-core"
+				),
+				.product(
+					name: "EventDispatch",
+					package: "swift-eventdispatch"
+				)
+			],
+			path: "Tests/URLSessionHTTPClientTests"
 		)
 	]
 )

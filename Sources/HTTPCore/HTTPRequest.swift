@@ -12,7 +12,7 @@ import HTTPCoreNativeCounters
 
 /// Transport-agnostic HTTP request. Bodies are raw bytes at the contract boundary.
 public struct HTTPRequest: Sendable,
-						  Encodable {
+						   Encodable {
 	// MARK: + Public scope
 
 	public let requestID: UInt64

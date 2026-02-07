@@ -14,22 +14,23 @@ import FoundationNetworking
 
 // MARK: - URLSessionCancellable
 
-/// Cancellable handle that wraps a URLSessionTask. Thread-safe; supports cancel before the task is set (e.g. when execution is scheduled on a queue).
+/// Cancellable handle that wraps a URLSessionTask.
+/// Thread-safe; supports cancel before the task is set (e.g. when execution is scheduled on a queue).
 final class URLSessionCancellable: @unchecked Sendable,
 								   Cancellable {
 	// MARK: + Private scope
 
 	private let lock: NSLock = .init()
-	private var _task: URLSessionTask?
-	private var _cancelled: Bool = false
+	private var sessionTask: URLSessionTask?
+	private var cancelled: Bool = false
 
 	// MARK: + Default scope
 
 	/// Sets the underlying task. Call from the execution queue after creating the task. If cancel was already called, cancels the task immediately.
 	func setTask(_ task: URLSessionTask) {
 		lock.lock()
-		_task = task
-		let alreadyCancelled = _cancelled
+		sessionTask = task
+		let alreadyCancelled = cancelled
 		lock.unlock()
 
 		if alreadyCancelled {
@@ -46,8 +47,8 @@ final class URLSessionCancellable: @unchecked Sendable,
 
 	func cancel() {
 		lock.lock()
-		_cancelled = true
-		let task = _task
+		cancelled = true
+		let task = sessionTask
 		lock.unlock()
 
 		task?.cancel()
