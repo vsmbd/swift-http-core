@@ -6,14 +6,17 @@
 //
 
 import Foundation
+import SwiftCore
 
 // MARK: - HTTPResponse
 
 /// Transport-agnostic HTTP response. Bodies are raw bytes.
 public struct HTTPResponse: Sendable,
-							Encodable {
+							Encodable,
+							Entity {
 	// MARK: + Public scope
 
+	public let identifier: UInt64
 	public let requestID: UInt64
 	public let statusCode: Int
 	public let headers: HTTPHeaders
@@ -25,6 +28,7 @@ public struct HTTPResponse: Sendable,
 		headers: HTTPHeaders,
 		data: Data
 	) {
+		self.identifier = Self.nextID
 		self.requestID = request.requestID
 		self.statusCode = statusCode
 		self.headers = headers

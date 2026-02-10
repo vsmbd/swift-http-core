@@ -1,5 +1,5 @@
 {
-  "originHash" : "9d717616af130a348b030b3c142ef0a990244254acb6b64b9c84d17952d3325e",
+  "originHash" : "191087b4e44b0e9bc79ae44b43d6b60e1c8c204c7676f00cc7897f1e228a92f4",
   "pins" : [
     {
       "identity" : "swift-core",
@@ -17,6 +17,15 @@
       "state" : {
         "branch" : "main",
         "revision" : "36c4083118d35100ea86f411a61330a9b745bfa3"
+      }
+    },
+    {
+      "identity" : "swift-json",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/vsmbd/swift-json.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "bf40e60dc2b57f1a7b131a4b6d38de57e426355a"
       }
     }
   ],

@@ -22,6 +22,10 @@ let package = Package(
 		.package(
 			url: "https://github.com/vsmbd/swift-eventdispatch.git",
 			branch: "main"
+		),
+		.package(
+			url: "https://github.com/vsmbd/swift-json.git",
+			branch: "main"
 		)
 	],
 	targets: [
@@ -36,6 +40,10 @@ let package = Package(
 				.product(
 					name: "EventDispatch",
 					package: "swift-eventdispatch"
+				),
+				.product(
+					name: "JSON",
+					package: "swift-json"
 				),
 			],
 			path: "Sources/HTTPCore"

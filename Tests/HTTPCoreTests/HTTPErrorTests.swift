@@ -26,6 +26,7 @@ struct HTTPErrorTests {
 		case (.cancelled, .cancelled), (.timeout, .timeout), (.invalidResponse, .invalidResponse):
 			return true
 		case let (.transport(x), .transport(y)): return x == y
+		case let (.json(x), .json(y)): return x == y
 		default: return false
 		}
 	}
@@ -47,7 +48,8 @@ struct HTTPErrorTests {
 			.cancelled,
 			.timeout,
 			.invalidResponse,
-			.transport(underlying: "test")
+			.transport(underlying: "test"),
+			.json(underlying: "test")
 		]
 		for error in cases {
 			let data = try JSONEncoder().encode(error)
