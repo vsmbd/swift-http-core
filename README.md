@@ -1,4 +1,4 @@
-# swift-http-core
+HTTPCore
 
 A small Swift package that defines an opinionated, transport-agnostic HTTP contract (**HTTPCore**) plus first-party transport adapters.
 
